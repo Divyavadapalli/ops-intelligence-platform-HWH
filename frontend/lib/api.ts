@@ -23,7 +23,13 @@ async function fetchJSON<T>(url: string, opts?: RequestInit): Promise<T> {
       throw new Error(`API error ${res.status}: ${text}`);
     }
   }
-  return res.json();
+  const text = await res.text();
+  if (!text) throw new Error("Empty response from API");
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("Invalid response from API");
+  }
 }
 
 export async function investigate(

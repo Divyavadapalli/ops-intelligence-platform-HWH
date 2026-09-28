@@ -3,157 +3,176 @@
 import { useEffect, useState } from "react";
 import { getAllDrift, seedData } from "@/lib/api";
 import type { DriftAnalysis } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle,
-  RefreshCw,
-  Shield,
-  Database,
-} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-function AgreementBadge({ level }: { level: string }) {
-  const config: Record<string, { label: string; className: string }> = {
-    contradicts: {
-      label: "Contradicts",
-      className: "bg-drift-contradicts/20 text-red-400 border-drift-contradicts/30",
-    },
-    "partial-conflict": {
-      label: "Partial Conflict",
-      className: "bg-drift-partial/20 text-orange-400 border-drift-partial/30",
-    },
-    aligned: {
-      label: "Aligned",
-      className: "bg-drift-aligned/20 text-green-400 border-drift-aligned/30",
-    },
+function cleanEvidence(raw: string): string {
+  // Extract all text='...' values from ReflectFact structures
+  const textMatches: string[] = [];
+  const textPattern = /text='([^']+)'/g;
+  let match;
+  while ((match = textPattern.exec(raw)) !== null) {
+    textMatches.push(match[1]);
+  }
+  if (textMatches.length > 0) {
+    return textMatches.join(" ");
+  }
+
+  // If it's a tuple like ('memories', []) or ('directives', [])
+  const tupleEmpty = raw.match(/^\('(\w+)',\s*\[\]\)$/);
+  if (tupleEmpty) return "";
+
+  // Strip ReflectFact wrapper if simple
+  let s = raw;
+  const reflectMatch = s.match(/^ReflectFact\(([\s\S]*)\)$/);
+  if (reflectMatch) s = reflectMatch[1];
+  // Strip UUIDs
+  s = s.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "");
+  // Strip internal keys
+  s = s.replace(/\b(id|context|document_id|metadata|bank_id|tags|source|type)='[^']*'/gi, "");
+  s = s.replace(/,\s*,/g, ",").replace(/,\s*$/g, "").replace(/\s{2,}/g, " ").trim();
+  if (s.length < 5) return "";
+  return s;
+}
+
+function AgreementIndicator({ level }: { level: string }) {
+  const config: Record<string, { label: string; color: string }> = {
+    contradicts: { label: "Contradicts", color: "text-p1" },
+    "partial-conflict": { label: "Partial conflict", color: "text-p2" },
+    aligned: { label: "Aligned", color: "text-drift-aligned" },
   };
   const c = config[level] || config.aligned;
   return (
-    <Badge variant="outline" className={c.className}>
+    <span className={cn("text-[11px] font-semibold uppercase tracking-wider", c.color)}>
       {c.label}
-    </Badge>
+    </span>
   );
 }
 
-function DriftCard({ drift }: { drift: DriftAnalysis }) {
-  const borderColor =
-    drift.agreement_level === "contradicts"
-      ? "border-red-500/30"
-      : drift.agreement_level === "partial-conflict"
-        ? "border-orange-500/30"
-        : "border-green-500/30";
+function DriftRow({ drift }: { drift: DriftAnalysis }) {
+  const [expanded, setExpanded] = useState(false);
 
-  const bgColor =
+  const borderAccent =
     drift.agreement_level === "contradicts"
-      ? "bg-red-950/10"
+      ? "border-l-p1"
       : drift.agreement_level === "partial-conflict"
-        ? "bg-orange-950/10"
-        : "bg-green-950/10";
+        ? "border-l-p2"
+        : "border-l-drift-aligned";
 
   return (
-    <Card className={`${bgColor} ${borderColor}`}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
+    <div
+      className={cn(
+        "border border-border rounded-lg overflow-hidden border-l-2",
+        borderAccent
+      )}
+    >
+      {/* Header row */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-surface-raised/50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-4 min-w-0">
           <div>
-            <CardTitle className="text-base font-semibold">
+            <span className="font-mono text-[13px] text-foreground">
               {drift.service}
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            </span>
+            <span className="text-muted-foreground/40 mx-2">·</span>
+            <span className="text-[13px] text-muted-foreground">
               {drift.error_pattern}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <AgreementBadge level={drift.agreement_level} />
-            <Badge
-              variant="outline"
-              className="bg-zinc-500/10 text-zinc-400 border-zinc-500/30"
-            >
-              {drift.confidence}
-            </Badge>
+            </span>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Runbook Says */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Shield className="w-4 h-4" />
-              Runbook Says
+        <div className="flex items-center gap-4 shrink-0">
+          {drift.confidence && (
+            <span className="text-[11px] text-muted-foreground">
+              {drift.confidence} confidence
+            </span>
+          )}
+          <AgreementIndicator level={drift.agreement_level} />
+          <span className="text-muted-foreground/50 text-xs transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "none" }}>
+            ›
+          </span>
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="border-t border-border">
+          {/* Two-column comparison */}
+          <div className="grid grid-cols-2 divide-x divide-border">
+            <div className="p-5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                Runbook guidance
+              </p>
+              <p className="text-[13px] text-foreground/80 leading-relaxed">
+                {drift.runbook_says}
+              </p>
             </div>
-            <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground/80 leading-relaxed">
-              {drift.runbook_says}
+            <div className="p-5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                Operational evidence
+              </p>
+              <p className="text-[13px] text-foreground/90 leading-relaxed">
+                {drift.evidence_says}
+              </p>
             </div>
           </div>
 
-          {/* Evidence Shows */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Database className="w-4 h-4" />
-              Evidence Shows
-            </div>
-            <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground/80 leading-relaxed">
-              {drift.evidence_says}
-            </div>
-          </div>
-        </div>
-
-        {drift.drift_detected && drift.recommended_update && (
-          <>
-            <Separator className="bg-border" />
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-accent">
-                <ArrowRight className="w-4 h-4" />
-                Recommended Update
-              </div>
-              <p className="text-sm text-foreground/80 leading-relaxed">
+          {/* Recommended update */}
+          {drift.drift_detected && drift.recommended_update && (
+            <div className="border-t border-border px-5 py-3.5 bg-surface-raised/50">
+              <p className="text-[11px] font-medium text-accent uppercase tracking-wider mb-1">
+                Recommended update
+              </p>
+              <p className="text-[13px] text-foreground/80 leading-relaxed">
                 {drift.recommended_update}
               </p>
             </div>
-          </>
-        )}
+          )}
 
-        {drift.supporting_incidents.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground">Evidence from:</span>
-            {drift.supporting_incidents.map((inc, i) => (
-              <Badge
-                key={i}
-                variant="outline"
-                className="text-xs bg-zinc-500/10 text-zinc-400 border-zinc-500/30"
-              >
-                {inc}
-              </Badge>
-            ))}
-          </div>
-        )}
+          {/* Supporting evidence */}
+          {(drift.supporting_incidents.length > 0 || (drift.based_on && drift.based_on.length > 0)) && (
+            <div className="border-t border-border px-5 py-3 bg-muted/30">
+              <div className="flex items-center gap-6 text-[11px] text-muted-foreground">
+                {drift.supporting_incidents.length > 0 && (
+                  <span>
+                    Evidence from:{" "}
+                    <span className="font-mono text-foreground/60">
+                      {drift.supporting_incidents.join(", ")}
+                    </span>
+                  </span>
+                )}
+              </div>
 
-        {drift.based_on && drift.based_on.length > 0 && (
-          <details className="text-xs">
-            <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
-              View source memories ({drift.based_on.length})
-            </summary>
-            <div className="mt-2 space-y-1 pl-4 border-l border-border">
-              {drift.based_on.slice(0, 5).map((fact, i) => (
-                <p key={i} className="text-muted-foreground leading-relaxed">
-                  {fact}
-                </p>
-              ))}
-              {drift.based_on.length > 5 && (
-                <p className="text-muted-foreground italic">
-                  ...and {drift.based_on.length - 5} more
-                </p>
-              )}
+              {drift.based_on && drift.based_on.length > 0 && (() => {
+                const cleaned = drift.based_on.map(cleanEvidence).filter(Boolean);
+                if (cleaned.length === 0) return null;
+                return (
+                  <details className="mt-2">
+                    <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
+                      Source memories ({cleaned.length})
+                    </summary>
+                    <div className="mt-2 space-y-1.5 pl-3 border-l border-border">
+                      {cleaned.slice(0, 5).map((fact, i) => (
+                        <p key={i} className="text-[12px] text-muted-foreground leading-relaxed">
+                          {fact}
+                        </p>
+                      ))}
+                      {cleaned.length > 5 && (
+                        <p className="text-[11px] text-muted-foreground/60 italic">
+                          and {cleaned.length - 5} more
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                );
+              })()}
             </div>
-          </details>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -171,8 +190,24 @@ export default function KnowledgeDriftPage() {
     try {
       const data = await getAllDrift(refresh);
       setDrifts(data);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load drift analysis");
+    } catch (firstErr: unknown) {
+      // Retry once on transient failures (truncated JSON, network hiccup)
+      try {
+        await new Promise((r) => setTimeout(r, 1500));
+        const data = await getAllDrift(refresh);
+        setDrifts(data);
+      } catch {
+        // Only show error if we have no valid data already
+        if (drifts.length === 0) {
+          const msg = firstErr instanceof Error ? firstErr.message : "Failed to load drift analysis";
+          setError(
+            msg.includes("JSON") || msg.includes("Unexpected")
+              ? "Drift analysis temporarily unavailable. Try again."
+              : msg
+          );
+        }
+        // If we already have valid drift data, silently keep it
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -201,127 +236,129 @@ export default function KnowledgeDriftPage() {
     (d) => d.agreement_level === "aligned"
   ).length;
 
+  const sorted = [...drifts].sort((a, b) => {
+    const order: Record<string, number> = {
+      contradicts: 0,
+      "partial-conflict": 1,
+      aligned: 2,
+    };
+    return (order[a.agreement_level] ?? 2) - (order[b.agreement_level] ?? 2);
+  });
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-[1100px] mx-auto px-5 py-6 space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-accent" />
+          <h1 className="text-lg font-semibold text-foreground">
             Knowledge Drift
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Detect when runbook guidance conflicts with accumulated evidence
-            from past incidents.
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Conflicts between documented runbook guidance and accumulated
+            operational evidence.
           </p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
-            size="sm"
             onClick={handleSeed}
             disabled={seeding}
-            className="border-border text-muted-foreground hover:text-foreground"
+            className="text-[13px] h-8 border-border text-muted-foreground hover:text-foreground"
           >
-            <Database className="w-4 h-4 mr-1" />
-            {seeding ? "Seeding..." : "Seed Data"}
+            {seeding ? "Seeding..." : "Seed data"}
           </Button>
           <Button
             variant="outline"
-            size="sm"
             onClick={() => load(true)}
             disabled={refreshing}
-            className="border-border text-muted-foreground hover:text-foreground"
+            className="text-[13px] h-8 border-border text-muted-foreground hover:text-foreground"
           >
-            <RefreshCw
-              className={`w-4 h-4 mr-1 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
+            {refreshing ? "Analysing..." : "Refresh"}
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats bar */}
       {!loading && drifts.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="bg-card border-border">
-            <CardContent className="pt-4 text-center">
-              <p className="text-3xl font-bold text-foreground">
-                {drifts.length}
-              </p>
-              <p className="text-sm text-muted-foreground">Runbooks analyzed</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-red-950/10 border-red-500/20">
-            <CardContent className="pt-4 text-center">
-              <p className="text-3xl font-bold text-red-400">{driftCount}</p>
-              <p className="text-sm text-muted-foreground">Drift detected</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-950/10 border-green-500/20">
-            <CardContent className="pt-4 text-center">
-              <p className="text-3xl font-bold text-green-400">
-                {alignedCount}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Confirmed aligned
-              </p>
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-6 py-3 px-5 border border-border rounded-lg bg-card text-[13px]">
+          <div>
+            <span className="text-muted-foreground">Runbooks analysed</span>
+            <span className="ml-2 font-semibold text-foreground">{drifts.length}</span>
+          </div>
+          <Separator orientation="vertical" className="h-4 bg-border" />
+          {driftCount > 0 && (
+            <>
+              <div>
+                <span className="text-muted-foreground">Drift detected</span>
+                <span className="ml-2 font-semibold text-p1">{driftCount}</span>
+              </div>
+              <Separator orientation="vertical" className="h-4 bg-border" />
+            </>
+          )}
+          <div>
+            <span className="text-muted-foreground">Aligned</span>
+            <span className="ml-2 font-semibold text-drift-aligned">{alignedCount}</span>
+          </div>
         </div>
       )}
 
+      {/* Error */}
       {error && (
-        <Card className="bg-red-950/30 border-red-500/30">
-          <CardContent className="pt-6">
-            <p className="text-red-400 text-sm">{error}</p>
-          </CardContent>
-        </Card>
+        <div className="border border-p1/20 rounded-lg p-4 bg-p1/5">
+          <p className="text-[13px] text-p1/90">
+            Drift analysis could not be completed.
+          </p>
+          <p className="text-[12px] text-muted-foreground mt-1">{error}</p>
+          <button
+            onClick={() => load(true)}
+            className="text-[12px] text-accent mt-2 hover:underline"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {/* Loading */}
       {loading && (
-        <div className="space-y-4">
+        <div className="space-y-3">
+          <p className="text-[13px] text-muted-foreground">
+            Comparing runbook guidance against operational evidence...
+          </p>
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="bg-card border-border">
-              <CardContent className="pt-6 space-y-3">
-                <div className="flex justify-between">
-                  <Skeleton className="h-5 w-40 bg-muted" />
-                  <Skeleton className="h-5 w-24 bg-muted" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Skeleton className="h-20 bg-muted rounded-lg" />
-                  <Skeleton className="h-20 bg-muted rounded-lg" />
-                </div>
-              </CardContent>
-            </Card>
+            <div key={i} className="border border-border rounded-lg p-5 animate-pulse space-y-3">
+              <div className="flex justify-between">
+                <div className="h-3 w-48 bg-muted rounded" />
+                <div className="h-3 w-20 bg-muted rounded" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-16 bg-muted rounded" />
+                <div className="h-16 bg-muted rounded" />
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Drift Cards — drift detected first */}
-      {!loading && drifts.length > 0 && (
-        <div className="space-y-4">
-          {drifts
-            .sort((a, b) => {
-              const order: Record<string, number> = { contradicts: 0, "partial-conflict": 1, aligned: 2 };
-              return (order[a.agreement_level] ?? 2) - (order[b.agreement_level] ?? 2);
-            })
-            .map((d, i) => (
-              <DriftCard key={i} drift={d} />
-            ))}
+      {/* Drift rows */}
+      {!loading && sorted.length > 0 && (
+        <div className="space-y-3">
+          {sorted.map((d, i) => (
+            <DriftRow key={i} drift={d} />
+          ))}
         </div>
       )}
 
+      {/* Empty state */}
       {!loading && drifts.length === 0 && !error && (
-        <Card className="bg-card border-border border-dashed">
-          <CardContent className="pt-8 pb-8 text-center space-y-3">
-            <AlertTriangle className="w-12 h-12 mx-auto text-muted-foreground/30" />
-            <p className="text-muted-foreground">
-              No drift analysis available yet. Click &quot;Seed Data&quot; to
-              load incidents and runbooks, then &quot;Refresh&quot; to analyze.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="border border-border border-dashed rounded-lg py-12 text-center">
+          <p className="text-[13px] text-muted-foreground mb-1">
+            No drift analysis available.
+          </p>
+          <p className="text-[12px] text-muted-foreground/60">
+            Seed incident data and runbooks, then refresh to compare guidance
+            against operational evidence.
+          </p>
+        </div>
       )}
     </div>
   );
