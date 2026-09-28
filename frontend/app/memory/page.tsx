@@ -26,22 +26,40 @@ export default function MemoryExplorerPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+      try {
+        return await fn();
+      } catch {
+        await new Promise((r) => setTimeout(r, 1000));
+        return fn();
+      }
+    }
+
     async function load() {
       setLoading(true);
       setError(null);
-      try {
-        const svc = selectedService === "all" ? undefined : selectedService;
-        const [ov, tl] = await Promise.all([
-          getMemoryOverview(svc),
-          getTimeline(svc),
-        ]);
-        setOverview(ov);
-        setTimeline(tl);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to load memory");
-      } finally {
-        setLoading(false);
+      const svc = selectedService === "all" ? undefined : selectedService;
+
+      const [ovResult, tlResult] = await Promise.allSettled([
+        withRetry(() => getMemoryOverview(svc)),
+        withRetry(() => getTimeline(svc)),
+      ]);
+
+      if (ovResult.status === "fulfilled") {
+        setOverview(ovResult.value);
       }
+      if (tlResult.status === "fulfilled") {
+        setTimeline(tlResult.value);
+      }
+
+      const failures = [ovResult, tlResult].filter(
+        (r) => r.status === "rejected"
+      );
+      if (failures.length > 0) {
+        setError("Some data failed to load — try refreshing the page");
+      }
+
+      setLoading(false);
     }
     load();
   }, [selectedService]);

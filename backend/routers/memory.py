@@ -27,8 +27,8 @@ async def overview(service: str | None = Query(None)):
         return err
     try:
         return await get_memory_overview(service)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Hindsight unavailable", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Hindsight temporarily unavailable — please retry"})
 
 
 @router.get("/timeline", response_model=list[TimelineEntry])
@@ -38,8 +38,8 @@ async def timeline(service: str | None = Query(None)):
         return err
     try:
         return await get_memory_timeline(service)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Hindsight unavailable", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Hindsight temporarily unavailable — please retry"})
 
 
 @router.get("/services")

@@ -27,8 +27,8 @@ async def analyze(
         )
     try:
         return await detect_knowledge_drift(service, error_pattern)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Drift analysis failed", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Drift analysis temporarily unavailable — please retry"})
 
 
 @router.get("/all", response_model=list[DriftAnalysis])
@@ -45,5 +45,5 @@ async def all_drift(refresh: bool = Query(False)):
     try:
         _drift_cache = await detect_all_drift()
         return _drift_cache
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Drift analysis failed", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Drift analysis temporarily unavailable — please retry"})

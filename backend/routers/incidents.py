@@ -17,8 +17,8 @@ async def investigate(req: InvestigateRequest):
         )
     try:
         return await investigate_incident(req.service, req.symptoms, req.severity)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Investigation failed", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Investigation temporarily unavailable — please retry"})
 
 
 @router.post("/outcome")
@@ -37,5 +37,5 @@ async def submit_outcome(req: OutcomeRequest):
             effective=req.effective,
             notes=req.notes,
         )
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": "Outcome recording failed", "detail": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "Outcome recording temporarily unavailable — please retry"})
