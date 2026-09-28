@@ -84,7 +84,10 @@ export async function getAllDrift(
 }
 
 export async function seedData(): Promise<{ status: string; retained: number }> {
-  return fetchJSON("/api/seed", { method: "POST" });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = process.env.NEXT_PUBLIC_SEED_TOKEN;
+  if (token) headers["X-Seed-Token"] = token;
+  return fetchJSON("/api/seed", { method: "POST", headers });
 }
 
 export async function healthCheck(): Promise<{ status: string }> {

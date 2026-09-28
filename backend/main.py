@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+import os
+
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
@@ -8,9 +10,13 @@ app = FastAPI(title="Memento", description="Incident Response Intelligence")
 
 settings = get_settings()
 
+origins = [settings.frontend_url]
+if settings.frontend_url != "http://localhost:3000":
+    origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,8 +41,13 @@ async def health():
     }
 
 
+SEED_TOKEN = os.environ.get("SEED_TOKEN", "")
+
+
 @app.post("/api/seed")
-async def seed_data():
+async def seed_data(x_seed_token: str | None = Header(None)):
+    if SEED_TOKEN and x_seed_token != SEED_TOKEN:
+        raise HTTPException(status_code=403, detail="Seed endpoint requires valid X-Seed-Token header")
     from backend.seed import run_seed
     from backend.routers.drift import clear_drift_cache
     result = await run_seed()
