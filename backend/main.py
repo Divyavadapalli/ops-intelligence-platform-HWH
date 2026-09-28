@@ -1,4 +1,4 @@
-import os
+import hmac
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,13 +41,13 @@ async def health():
     }
 
 
-SEED_TOKEN = os.environ.get("SEED_TOKEN", "")
-
-
 @app.post("/api/seed")
 async def seed_data(x_seed_token: str | None = Header(None)):
-    if SEED_TOKEN and x_seed_token != SEED_TOKEN:
-        raise HTTPException(status_code=403, detail="Seed endpoint requires valid X-Seed-Token header")
+    token = get_settings().seed_token
+    if not token:
+        raise HTTPException(status_code=503, detail="Seed endpoint not configured — set SEED_TOKEN env var")
+    if not x_seed_token or not hmac.compare_digest(x_seed_token, token):
+        raise HTTPException(status_code=403, detail="Invalid X-Seed-Token")
     from backend.seed import run_seed
     from backend.routers.drift import clear_drift_cache
     result = await run_seed()
