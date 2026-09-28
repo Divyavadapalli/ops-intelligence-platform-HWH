@@ -61,9 +61,13 @@
 
 "The organization just learned something new. Next time this happens, Memento will be even more confident."
 
-### 2:40–3:00 — Value
+### 2:40–2:50 — Show the Learning
 
-"Memento turns every incident into institutional memory. It doesn't just store what happened — it tracks what worked, what failed, and where your documentation has drifted from reality. With evidence."
+"Watch — the outcome was just retained. If a similar incident comes in now, Memento's recommendation will change because it learned from this one."
+
+### 2:50–3:00 — Value
+
+"Memento doesn't just remember what happened. It remembers what the organisation learned."
 
 ## Key Points to Emphasize
 

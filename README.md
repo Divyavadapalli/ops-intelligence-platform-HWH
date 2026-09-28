@@ -73,6 +73,12 @@ Click the "Seed Data" button on the Knowledge Drift page, or:
 curl -X POST http://localhost:8000/api/seed
 ```
 
+In production, set `SEED_TOKEN` in your environment and pass the header:
+
+```bash
+curl -X POST -H "X-Seed-Token: your-token" https://your-api/api/seed
+```
+
 This retains 20 incidents + 4 runbooks into Hindsight. Wait ~60 seconds for observation consolidation before testing drift detection.
 
 ## Demo Walkthrough (3 minutes)
@@ -88,6 +94,35 @@ A payment-service 503 error runbook says to "restart payment-service first." But
 3. **See the magic**: Memento recalls past incidents, recommends checking cache-cluster FIRST (not restarting payment-service), and shows supporting evidence
 4. **Navigate to Knowledge Drift** → See the conflict: Runbook says X, Evidence says Y, with incident citations
 5. **Record outcome**: After "fixing" the incident, record that cache-cluster fix worked → Memento learns
+
+## Deployment
+
+### Backend (Render / Railway)
+
+Set environment variables:
+
+| Variable | Value |
+|----------|-------|
+| `HINDSIGHT_BASE_URL` | `https://api.hindsight.vectorize.io` |
+| `HINDSIGHT_API_KEY` | Your Hindsight Cloud API key |
+| `HINDSIGHT_BANK_ID` | `memento-demo-final` |
+| `GROQ_API_KEY` | Your Groq API key |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` |
+| `GROQ_FALLBACK_MODEL` | `qwen/qwen3.8-27b` |
+| `FRONTEND_URL` | Your deployed frontend URL |
+| `SEED_TOKEN` | A random string to protect the seed endpoint |
+
+The Procfile starts uvicorn on `$PORT`.
+
+### Frontend (Vercel)
+
+Set environment variable:
+
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_API_URL` | Your deployed backend URL |
+
+Root directory: `frontend`
 
 ## Architecture
 
