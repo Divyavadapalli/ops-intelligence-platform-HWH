@@ -9,6 +9,11 @@ router = APIRouter()
 _drift_cache: list[DriftAnalysis] | None = None
 
 
+def clear_drift_cache():
+    global _drift_cache
+    _drift_cache = None
+
+
 @router.get("/analyze", response_model=DriftAnalysis)
 async def analyze(
     service: str = Query(...),

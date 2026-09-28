@@ -38,5 +38,7 @@ async def health():
 @app.post("/api/seed")
 async def seed_data():
     from backend.seed import run_seed
+    from backend.routers.drift import clear_drift_cache
     result = await run_seed()
+    clear_drift_cache()
     return result

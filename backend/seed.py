@@ -90,25 +90,28 @@ Long-term fix: reduce max pool size per service, add connection timeouts.""",
         "service": "user-api",
         "error_pattern": "slow query timeouts",
         "title": "User API Slow Query Timeouts Runbook",
-        "last_updated": "2026-04-20",
+        "last_updated": "2026-09-15",
         "content": """## Runbook: User API Slow Query Timeouts
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-09-15 (updated after INC-003, INC-010, INC-017)
 
 ### Step 1 — Check PostgreSQL slow query log (5 min)
-Query pg_stat_activity for long-running queries. Kill any that exceed 30 seconds.
+Query pg_stat_activity for long-running queries. Kill any that exceed 30 seconds. Check for "idle in transaction" connections which may indicate deadlocks (see INC-010).
 
 ### Step 2 — Check for missing indexes (5 min)
-Run EXPLAIN ANALYZE on the slow queries. Add indexes if sequential scans are found on large tables.
+Run EXPLAIN ANALYZE on the slow queries. Add indexes if sequential scans are found on large tables. New columns used in WHERE clauses frequently lack indexes after migrations (see INC-003).
 
-### Step 3 — Check for table bloat (3 min)
-If the users table hasn't been vacuumed recently, run VACUUM ANALYZE.
+### Step 3 — Check for N+1 query patterns (5 min)
+Check per-endpoint query counts in monitoring. If a single request generates hundreds of individual SELECT queries, the code is likely loading related data individually instead of with a batch JOIN. Rewrite to use batch loading (see INC-017).
 
-### Step 4 — Check connection pool saturation (3 min)
-If all connections are busy, increase pool size or add read replicas.
+### Step 4 — Check for table bloat (3 min)
+If tables haven't been vacuumed recently, run VACUUM ANALYZE.
 
-### Step 5 — Restart user-api pods
-Rolling restart to clear any connection leaks.""",
+### Step 5 — Check connection pool saturation and deadlocks (5 min)
+If all connections are busy, check for deadlocked transactions in pg_stat_activity. Kill deadlocked transactions first, then consider increasing pool size. Configure statement_timeout to prevent unbounded queries (see INC-010).
+
+### Step 6 — Restart user-api pods if needed
+Rolling restart to clear any connection pool state, only after addressing root cause above.""",
     },
 ]
 
